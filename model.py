@@ -34,6 +34,23 @@ class TimestepEmbedding(nn.Module):
         return t_emb
 
 
+class LabelEmbedding(nn.Module):
+    def __init__(self, num_classes, hidden_size, dropout):
+        super().__init__()
+        use_cfg = dropout > 0
+        self.embedding = nn.Embedding(num_classes + use_cfg, hidden_size)
+        self.num_classes = num_classes
+        self.dropout = dropout
+
+    def forward(self, labels, is_train):
+        if is_train and self.dropout > 0:
+            ids_to_drop = (
+                torch.rand(labels.shape[0], device=labels.device) < self.dropout
+            )
+            labels = torch.where(ids_to_drop, self.num_classes, labels)
+        return self.embedding(labels)
+
+
 class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads):
         super().__init__()
@@ -98,6 +115,9 @@ class SimpleDiT(nn.Module):
 
         # Time embedding
         self.time_embed = TimestepEmbedding(hidden_size)
+
+        # Label embedding
+        self.label_embed = LabelEmbedding(num_classes, hidden_size, class_dropout)
 
         # Transformer blocks
         self.blocks = nn.ModuleList(

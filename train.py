@@ -61,6 +61,7 @@ def main():
         num_layers=args.num_layers,
         num_heads=args.num_heads,
         patch_size=args.patch_size,
+        num_classes=10,
     )
 
     # Create dataset and dataloader (VAE expects RGB images)
@@ -111,7 +112,7 @@ def main():
 
         for batch in progress_bar:
             # MNIST returns (images, labels), we only need images
-            images, _ = batch
+            images, labels = batch
 
             with accelerator.accumulate(model):
                 # Encode images to latent space
@@ -133,7 +134,7 @@ def main():
                 noisy_latents = (1 - t_normalized) * latents + t_normalized * noise
 
                 # Predict noise
-                noise_pred = model(noisy_latents, timesteps)
+                noise_pred = model(noisy_latents, timesteps, labels)
 
                 # MSE loss
                 loss = F.mse_loss(noise_pred, noise)
