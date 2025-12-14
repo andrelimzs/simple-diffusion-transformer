@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# UV
+.venv
+.python-version
+
+# Data files and checkpoints
+data/
+checkpoints/
+wandb/
+logs/
