@@ -8,7 +8,8 @@ from diffusers import AutoencoderKL
 import argparse
 from tqdm import tqdm
 import os
-from torchvision.utils import save_image
+from torchvision.utils import save_image, make_grid
+import wandb
 
 from model import SimpleDiT
 
@@ -33,8 +34,8 @@ def get_args():
     parser.add_argument(
         "--sample_every",
         type=int,
-        default=10,
-        help="Sample image grid every N training steps (0 disables).",
+        default=500,
+        help="Save samples every",
     )
     return parser.parse_args()
 
@@ -77,6 +78,13 @@ def main():
     )
 
     set_seed(args.seed)
+
+    # Download dataset
+    if accelerator.is_main_process:
+        datasets.MNIST(root=args.data_dir, train=True, download=True)
+        datasets.MNIST(root=args.data_dir, train=False, download=True)
+
+    accelerator.wait_for_everyone()
 
     # Load pretrained VAE and freeze weights
     vae = AutoencoderKL.from_pretrained(args.vae_model)
@@ -180,10 +188,24 @@ def main():
 
             # Generate samples for evaluation
             if args.sample_every > 0 and (global_step % args.sample_every == 0):
-                images = generate_samples(model, vae, accelerator.device)
+                # Generate model samples
+                unwrapped = accelerator.unwrap_model(model)
+                images = generate_samples(unwrapped, vae, accelerator.device)
+
                 if accelerator.is_main_process:
+                    # Save images
                     save_path = os.path.join("./samples", f"step_{global_step:08d}.png")
                     save_image(images, save_path, nrow=3)
+
+                    # Log if configured
+                    if args.log:
+                        image_to_log = wandb.Image(
+                            make_grid(images, nrow=3), caption=f"Step {global_step}"
+                        )
+                        accelerator.log(
+                            {"samples": image_to_log},
+                            step=global_step,
+                        )
 
             global_step += 1
 
