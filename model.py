@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import math
 
 
 class TimestepEmbedding(nn.Module):
@@ -15,17 +14,27 @@ class TimestepEmbedding(nn.Module):
 
     @staticmethod
     def timestep_embedding(t, dim, max_period=10000):
-        # Frequency bands in logspace from 1.0 to 1/max_period
-        freq_bands = torch.exp(
-            -math.log(max_period) * torch.linspace(start=0, end=1, steps=dim // 2)
-        ).to(device=t.device)  # (D//2, )
-        # Embedding is [cos(freq_bands), sin(freq_bands)]
-        x = t[:, None].float() * freq_bands[None]  # (T, D//2)
-        embedding = torch.cat([torch.cos(x), torch.sin(x)], dim=-1)  # (T, D)
+        """
+        t: tensor of timesteps (M, )
+        dim: output_dim
+        out: (M, D) if M divisible by 2 else (M+1, D)
+        """
+        # Create exponentially spaced frequencies
+        freqs = (1 / max_period ** torch.linspace(start=0, end=1, steps=dim // 2)).to(
+            device=t.device
+        )
+
+        # Compute grid as outer product of time and frequency
+        grid = t.reshape(-1, 1).float() @ freqs.reshape(1, -1)
+
+        embedding = torch.cat([torch.cos(grid), torch.sin(grid)], dim=-1)  # (T, D)
+
+        # Pad if necessary
         if dim % 2:
             embedding = torch.cat(
                 [embedding, torch.zeros_like(embedding[:, :1])], dim=-1
             )
+
         return embedding
 
     def forward(self, t):
