@@ -8,6 +8,7 @@ from diffusers import AutoencoderKL
 import argparse
 from tqdm import tqdm
 import os
+from torchvision.utils import save_image
 
 from model import SimpleDiT
 
@@ -29,7 +30,34 @@ def get_args():
     parser.add_argument("--data_dir", type=str, default="./data")
     parser.add_argument("--vae_model", type=str, default="stabilityai/sd-vae-ft-mse")
     parser.add_argument("--log", action="store_true")
+    parser.add_argument(
+        "--sample_every",
+        type=int,
+        default=10,
+        help="Sample image grid every N training steps (0 disables).",
+    )
     return parser.parse_args()
+
+
+@torch.no_grad()
+def generate_samples(model, vae, device):
+    # Temporarily switch to eval for sampling
+    was_training = model.training
+    model.eval()
+
+    # Generate latent samples
+    labels = torch.arange(9, device=device)
+    latents = model.p_sample_loop(labels)
+
+    # Decode latents -> images in [-1, 1]
+    latents = latents / vae.config.scaling_factor
+    images = vae.decode(latents).sample
+    images = (images.clamp(-1, 1) + 1) / 2.0  # -> [0,1]
+
+    if was_training:
+        model.train()
+
+    return images
 
 
 def main():
@@ -37,6 +65,7 @@ def main():
 
     # Ensure directories exist
     os.makedirs("./checkpoints", exist_ok=True)
+    os.makedirs("./samples", exist_ok=True)
     os.makedirs(args.data_dir, exist_ok=True)
 
     # Initialize accelerator
@@ -148,6 +177,13 @@ def main():
             if accelerator.is_main_process:
                 progress_bar.set_postfix(loss=loss.item())
                 accelerator.log({"loss": loss.item()}, step=global_step)
+
+            # Generate samples for evaluation
+            if args.sample_every > 0 and (global_step % args.sample_every == 0):
+                images = generate_samples(model, vae, accelerator.device)
+                if accelerator.is_main_process:
+                    save_path = os.path.join("./samples", f"step_{global_step:08d}.png")
+                    save_image(images, save_path, nrow=3)
 
             global_step += 1
 
