@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# Python / Environment
+.venv
+.python-version
+__pycache__
+*.pyc
+.ruff_cache
+.pytest_cache
+
+# Mac
+.DS_Store
+
+# Project Artifacts (Don't copy these to the image)
+wandb
+checkpoints
+samples
+data
+logs
