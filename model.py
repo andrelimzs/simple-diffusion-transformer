@@ -85,6 +85,51 @@ class DiTBlock(nn.Module):
         return x
 
 
+def compute_2d_sincos_embed(embed_dim, grid_size):
+    """
+    embed_dim: output_dim, must be divisible by 2
+    grid_size: size of grid, must be int
+    out: (grid_size**2, embed_dim)
+    """
+    # Create grid of index positions
+    grid_h, grid_w = torch.meshgrid(
+        torch.arange(grid_size), torch.arange(grid_size), indexing="xy"
+    )
+
+    embedding = torch.concat(
+        [
+            compute_1d_sincos_embed(embed_dim // 2, grid_h.flatten()),
+            compute_1d_sincos_embed(embed_dim // 2, grid_w.flatten()),
+        ],
+        dim=1,
+    )
+
+    return embedding
+
+
+def compute_1d_sincos_embed(embed_dim, pos):
+    """
+    embed_dim: output_dim, must be divisible by 2
+    pos: tensor of positions (M, )
+    out: (M, D)
+    """
+    assert embed_dim % 2 == 0
+
+    # Compute exponentially spaced frequencies
+    exp = torch.arange(embed_dim // 2) / (embed_dim / 2)
+    freqs = 1 / 1e4**exp
+
+    # Compute grid as outer product of position and frequency
+    pos_freq_grid = pos.float().reshape(-1, 1) @ freqs.reshape(1, -1)
+
+    # Embedding is concatenation of sin and cos components
+    embedding = torch.concat(
+        [torch.sin(pos_freq_grid), torch.cos(pos_freq_grid)], dim=1
+    )
+
+    return embedding
+
+
 class SimpleDiT(nn.Module):
     def __init__(
         self,
@@ -135,7 +180,11 @@ class SimpleDiT(nn.Module):
         )
 
     def initialize_weights(self):
-        pass
+        with torch.no_grad():
+            # Initialize pos_embed with fixed 2d sin-cos embedding
+            _, num_patches, hidden_size = self.pos_embed.shape
+            sincos_embed = compute_2d_sincos_embed(hidden_size, int(num_patches**0.5))
+            self.pos_embed.copy_(sincos_embed.unsqueeze(0))
 
     def patchify(self, x):
         """

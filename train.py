@@ -63,6 +63,7 @@ def main():
         patch_size=args.patch_size,
         num_classes=10,
     )
+    model.initialize_weights()
 
     # Create dataset and dataloader (VAE expects RGB images)
     transform = transforms.Compose(
