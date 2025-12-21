@@ -16,7 +16,7 @@ from model import SimpleDiT
 def get_args():
     parser = argparse.ArgumentParser(description="Train SimpleDiT")
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save_every", type=int, default=10)
@@ -141,7 +141,7 @@ def main():
         )
 
         for batch in progress_bar:
-            # MNIST returns (images, labels), we only need images
+            # MNIST returns (images, labels)
             images, labels = batch
 
             with accelerator.accumulate(model):

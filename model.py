@@ -47,7 +47,8 @@ class LabelEmbedding(nn.Module):
             ids_to_drop = (
                 torch.rand(labels.shape[0], device=labels.device) < self.dropout
             )
-            labels = torch.where(ids_to_drop, self.num_classes, labels)
+            labels = torch.where(ids_to_drop, -1, labels)
+        labels = torch.where(labels == -1, self.num_classes, labels)
         return self.embedding(labels)
 
 
@@ -237,8 +238,21 @@ class SimpleDiT(nn.Module):
 
         return x
 
+    def cfg_forward(self, x, t, y, scale=5.0):
+        """
+        Batched classifier-free guidance forward pass
+        """
+        # Compute both conditionl and unconditional scores in one forward
+        y_batched = torch.cat([y, -1 * torch.ones_like(y)])
+        batched_out = self.forward(x.repeat(2, 1, 1, 1), t.repeat(2), y_batched)
+
+        cond_score, uncond_score = batched_out.chunk(2)
+
+        cfg_score = uncond_score + scale * (cond_score - uncond_score)
+        return cfg_score
+
     @torch.no_grad()
-    def p_sample_loop(self, labels, num_timesteps=1000):
+    def p_sample_loop(self, labels, scale=5.0, num_timesteps=1000):
         num_samples = labels.shape[0]
         device = next(self.parameters()).device
 
@@ -254,7 +268,7 @@ class SimpleDiT(nn.Module):
             t_norm = timesteps.float() / num_timesteps
             t_norm = t_norm[:, None, None, None]
 
-            noise_pred = self(latents, timesteps, labels)
+            noise_pred = self.cfg_forward(latents, timesteps, labels, scale)
 
             # Invert the training forward mixture:
             # noisy = (1-t)*x0 + t*eps  => x0_hat = (noisy - t*eps_hat)/(1-t)
