@@ -153,9 +153,9 @@ class SimpleDiT(nn.Module):
         )
 
         # Position embedding
-        num_patches = (input_size // patch_size) ** 2
+        self.num_patches = (input_size // patch_size) ** 2
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, num_patches, hidden_size), requires_grad=False
+            torch.zeros(1, self.num_patches, hidden_size), requires_grad=False
         )
 
         # Time embedding
@@ -236,3 +236,35 @@ class SimpleDiT(nn.Module):
         x = self.unpatchify(x)  # (B, in_channels, H, W)
 
         return x
+
+    @torch.no_grad()
+    def p_sample_loop(self, labels, num_timesteps=1000):
+        num_samples = labels.shape[0]
+        device = next(self.parameters()).device
+
+        assert labels.device == device
+
+        # Infer spatial size from pos_embed
+        h = w = int(self.num_patches**0.5) * self.patch_size
+
+        latents = torch.randn(num_samples, self.in_channels, h, w, device=device)
+
+        for t in reversed(range(num_timesteps)):
+            timesteps = torch.full((num_samples,), t, device=device, dtype=torch.long)
+            t_norm = timesteps.float() / num_timesteps
+            t_norm = t_norm[:, None, None, None]
+
+            noise_pred = self(latents, timesteps, labels)
+
+            # Invert the training forward mixture:
+            # noisy = (1-t)*x0 + t*eps  => x0_hat = (noisy - t*eps_hat)/(1-t)
+            denom = (1.0 - t_norm).clamp(min=1e-5)
+            x0_hat = (latents - t_norm * noise_pred) / denom
+
+            # Use x0_hat as next latent; add a bit of noise except at final step
+            if t > 0:
+                latents = (1.0 - t_norm) * x0_hat + t_norm * torch.randn_like(latents)
+            else:
+                latents = x0_hat
+
+        return latents
