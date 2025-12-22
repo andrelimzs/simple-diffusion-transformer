@@ -12,7 +12,7 @@ from torchvision.utils import save_image, make_grid
 import wandb
 
 from model import SimpleDiT
-from eval import generate_samples
+from eval import generate_samples, compute_fid
 
 
 def get_args():
@@ -37,6 +37,12 @@ def get_args():
         type=int,
         default=500,
         help="Save samples every",
+    )
+    parser.add_argument(
+        "--fid_every",
+        type=int,
+        default=1000,
+        help="Compute FID every N steps (0 to disable)",
     )
     return parser.parse_args()
 
@@ -188,6 +194,19 @@ def main():
                             {"samples": image_to_log},
                             step=global_step,
                         )
+
+            # Compute FID
+            if args.fid_every > 0 and (global_step % args.fid_every == 0):
+                fid_score = compute_fid(
+                    dataset,
+                    accelerator.unwrap_model(model),
+                    vae,
+                    num_samples=2000,  # Use fewer samples during training for speed
+                    accelerator=accelerator,
+                )
+                if accelerator.is_main_process:
+                    accelerator.log({"fid": fid_score}, step=global_step)
+                    print(f"Step {global_step}: FID = {fid_score}")
 
             global_step += 1
 
