@@ -17,12 +17,18 @@ from eval import generate_samples, compute_fid
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train SimpleDiT")
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=1000)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save_every", type=int, default=10)
-    parser.add_argument("--num_timesteps", type=int, default=1000)
+    parser.add_argument("--train_timesteps", type=int, default=1000)
+    parser.add_argument(
+        "--inference_steps",
+        type=int,
+        default=25,
+        help="Number of steps for inference. If None, uses train_timesteps.",
+    )
     parser.add_argument("--hidden_size", type=int, default=512)
     parser.add_argument("--num_layers", type=int, default=12)
     parser.add_argument("--num_heads", type=int, default=8)
@@ -41,7 +47,7 @@ def get_args():
     parser.add_argument(
         "--fid_every",
         type=int,
-        default=1000,
+        default=500,
         help="Compute FID every N steps (0 to disable)",
     )
     return parser.parse_args()
@@ -146,14 +152,14 @@ def main():
 
                 # Sample random timesteps
                 timesteps = torch.randint(
-                    0, args.num_timesteps, (latents.shape[0],), device=latents.device
+                    0, args.train_timesteps, (latents.shape[0],), device=latents.device
                 )
 
                 # Sample noise
                 noise = torch.randn_like(latents)
 
                 # Add noise to latents (simple linear schedule)
-                t_normalized = timesteps.float() / args.num_timesteps
+                t_normalized = timesteps.float() / args.train_timesteps
                 t_normalized = t_normalized[:, None, None, None]
                 noisy_latents = (1 - t_normalized) * latents + t_normalized * noise
 
@@ -177,7 +183,12 @@ def main():
                 # Generate model samples
                 labels = torch.arange(9)
                 images = generate_samples(
-                    accelerator.unwrap_model(model), vae, labels, accelerator.device
+                    accelerator.unwrap_model(model),
+                    vae,
+                    labels,
+                    accelerator.device,
+                    train_timesteps=args.train_timesteps,
+                    inference_steps=args.inference_steps,
                 )
 
                 if accelerator.is_main_process:
@@ -201,8 +212,10 @@ def main():
                     dataset,
                     accelerator.unwrap_model(model),
                     vae,
-                    num_samples=2000,  # Use fewer samples during training for speed
+                    num_samples=5000,
                     accelerator=accelerator,
+                    train_timesteps=args.train_timesteps,
+                    inference_steps=args.inference_steps,
                 )
                 if accelerator.is_main_process:
                     accelerator.log({"fid": fid_score}, step=global_step)

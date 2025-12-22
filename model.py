@@ -261,20 +261,25 @@ class SimpleDiT(nn.Module):
         return cfg_score
 
     @torch.no_grad()
-    def p_sample_loop(self, labels, scale=5.0, num_timesteps=1000):
+    def p_sample_loop(
+        self, labels, scale=5.0, train_timesteps=1000, inference_steps=None
+    ):
         num_samples = labels.shape[0]
         device = next(self.parameters()).device
 
         assert labels.device == device
+
+        steps = inference_steps if inference_steps is not None else train_timesteps
 
         # Infer spatial size from pos_embed
         h = w = int(self.num_patches**0.5) * self.patch_size
 
         latents = torch.randn(num_samples, self.in_channels, h, w, device=device)
 
-        for t in reversed(range(num_timesteps)):
+        for t in reversed(range(steps)):
+            t = int(t / steps * train_timesteps)  # Map inference steps to train steps
             timesteps = torch.full((num_samples,), t, device=device, dtype=torch.long)
-            t_norm = timesteps.float() / num_timesteps
+            t_norm = timesteps.float() / train_timesteps
             t_norm = t_norm[:, None, None, None]
 
             noise_pred = self.cfg_forward(latents, timesteps, labels, scale)
