@@ -225,8 +225,18 @@ def main():
 
         # Save checkpoint
         if (epoch + 1) % args.save_every == 0 and accelerator.is_main_process:
-            accelerator.save_state(f"./checkpoints/epoch_{epoch + 1}")
+            save_path = f"./checkpoints/epoch_{epoch + 1}"
+            accelerator.save_state(save_path)
             accelerator.print(f"Saved checkpoint at epoch {epoch + 1}")
+
+            if args.log:
+                artifact = wandb.Artifact(
+                    name=f"checkpoint-epoch-{epoch + 1}",
+                    type="model",
+                    metadata={"epoch": epoch + 1, "step": global_step},
+                )
+                artifact.add_dir(save_path)
+                wandb.log_artifact(artifact)
 
     # End tracking
     accelerator.end_training()
