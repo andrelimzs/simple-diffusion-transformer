@@ -16,6 +16,11 @@ COPY pyproject.toml uv.lock ./
 # --no-dev skips development dependencies
 RUN uv sync --frozen --no-install-project --no-dev
 
+# Install curl and runpodctl for auto-termination
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN curl -L https://github.com/runpod/runpodctl/releases/download/v1.13.0/runpodctl-linux-amd64 -o /usr/local/bin/runpodctl && \
+    chmod +x /usr/local/bin/runpodctl
+
 # Copy the rest of the application
 COPY . .
 
@@ -30,6 +35,6 @@ RUN rm -rf checkpoints samples wandb && \
 # Define volumes for persistent data
 VOLUME ["/workspace/checkpoints", "/workspace/samples", "/workspace/wandb"]
 
-# Run the training script
+# Run the training script and then kill the pod
 # We use `accelerate launch` to handle distributed training
-CMD ["uv", "run", "accelerate", "launch", "--config_file", "accelerate_config.yaml", "train.py", "--log"]
+CMD ["/bin/bash", "-c", "uv run accelerate launch --config_file accelerate_config.yaml train.py --log && runpodctl stop pod $RUNPOD_POD_ID"]
