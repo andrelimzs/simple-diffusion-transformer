@@ -12,6 +12,7 @@ from torchvision.utils import save_image, make_grid
 import wandb
 
 from model import SimpleDiT
+from eval import generate_samples
 
 
 def get_args():
@@ -38,27 +39,6 @@ def get_args():
         help="Save samples every",
     )
     return parser.parse_args()
-
-
-@torch.no_grad()
-def generate_samples(model, vae, device):
-    # Temporarily switch to eval for sampling
-    was_training = model.training
-    model.eval()
-
-    # Generate latent samples
-    labels = torch.arange(9, device=device)
-    latents = model.p_sample_loop(labels)
-
-    # Decode latents -> images in [-1, 1]
-    latents = latents / vae.config.scaling_factor
-    images = vae.decode(latents).sample
-    images = (images.clamp(-1, 1) + 1) / 2.0  # -> [0,1]
-
-    if was_training:
-        model.train()
-
-    return images
 
 
 def main():
@@ -189,8 +169,10 @@ def main():
             # Generate samples for evaluation
             if args.sample_every > 0 and (global_step % args.sample_every == 0):
                 # Generate model samples
-                unwrapped = accelerator.unwrap_model(model)
-                images = generate_samples(unwrapped, vae, accelerator.device)
+                labels = torch.arange(9)
+                images = generate_samples(
+                    accelerator.unwrap_model(model), vae, labels, accelerator.device
+                )
 
                 if accelerator.is_main_process:
                     # Save images
