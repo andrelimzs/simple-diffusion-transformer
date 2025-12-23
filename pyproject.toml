@@ -16,3 +16,8 @@ dependencies = [
     "torchmetrics>=1.6.1",
     "torch-fidelity>=0.3.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
