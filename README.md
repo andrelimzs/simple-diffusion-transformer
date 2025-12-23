@@ -1,6 +1,17 @@
-# Simple Diffusion Transformer
+## Simple Diffusion Transformer
 
 A simple implementation of a Latent Diffusion Transformer (DiT) model trained on MNIST.
+
+<p align="center">
+  <img src="assets/sample_0.png" width="30%" />
+  <img src="assets/sample_1000.png" width="30%" />
+  <img src="assets/sample_8500.png" width="30%" />
+</p>
+
+<p align="center">
+  <img src="assets/train_loss.png" width="45%" />
+  <img src="assets/fid.png" width="45%" />
+</p>
 
 ## Overview
 
@@ -8,10 +19,7 @@ This project provides a minimal implementation of a diffusion transformer for ed
 - **Architecture**: Diffusion Transformer (DiT) operating in latent space.
 - **Dataset**: MNIST (upscaled and converted to RGB).
 - **VAE**: Uses a frozen pre-trained VAE (`stabilityai/sd-vae-ft-mse`) to compress images into latents.
-- **Noise Schedule**: Simple linear interpolation schedule
-$$
-x_t = (1-t)\ x_0 + t\epsilon
-$$
+- **Noise Schedule**: Simple linear interpolation schedule (x_t = (1-t)\ x_0 + t\epsilon)
 
 ## Prerequisites
 
